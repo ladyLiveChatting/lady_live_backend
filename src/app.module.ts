@@ -30,3 +30,18 @@ import { AgoraModule } from './agora/agora.module';
   ],
 })
 export class AppModule {}
+/*
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    ChatModule,
+    DiscoveryModule,
+    WalletModule,
+    CallsModule,
+    SocketModule,
+    AgoraModule,
+  ],
+})
+export class AppModule {} */
