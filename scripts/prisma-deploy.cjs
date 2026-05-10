@@ -2,7 +2,8 @@
 
 const path = require('path');
 const { spawnSync } = require('child_process');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const { loadEnvFromDisk } = require('./load-env-files.cjs');
+loadEnvFromDisk(path.join(__dirname, '..'));
 
 const { ensureDatabaseUrl, onRailway } = require('./ensure-database-url.cjs');
 ensureDatabaseUrl();

@@ -17,17 +17,22 @@ async function bootstrap() {
     }),
   );
 
-  const swagger = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('Meet & Connect API')
     .setDescription('REST + Socket.IO for dating / call simulation (no WebRTC).')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swagger));
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, swaggerDocument);
+  SwaggerModule.setup('api-docs', app, swaggerDocument);
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  Logger.log(`API http://localhost:${port}  Swagger /docs`, 'Bootstrap');
+  Logger.log(
+    `API http://localhost:${port}  Swagger /docs and /api-docs`,
+    'Bootstrap',
+  );
 }
 
 bootstrap().catch((err) => {

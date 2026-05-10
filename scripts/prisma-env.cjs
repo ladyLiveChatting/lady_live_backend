@@ -1,4 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const { loadEnvFromDisk } = require('./load-env-files.cjs');
+loadEnvFromDisk(path.join(__dirname, '..'));
 const { ensureDatabaseUrl } = require('./ensure-database-url.cjs');
 ensureDatabaseUrl();

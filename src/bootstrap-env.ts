@@ -1,8 +1,8 @@
-import { config } from 'dotenv';
 import { join } from 'path';
+import { loadEnvFromDisk } from './config/load-env';
 
 /** Run before any module imports Prisma so `DATABASE_URL` exists for schema.prisma. */
-config({ path: join(__dirname, '..', '.env') });
+loadEnvFromDisk(join(__dirname, '..'));
 
 // Railway MySQL exposes MYSQL_URL / MYSQLHOST+…; local uses DB_* (see scripts/ensure-database-url.cjs).
 // eslint-disable-next-line @typescript-eslint/no-require-imports

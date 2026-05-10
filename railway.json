@@ -14,6 +14,7 @@
   },
   "deploy": {
     "preDeployCommand": null,
-    "startCommand": "npm run start:railway"
+    "startCommand": "npm run start:railway",
+    "healthcheckPath": "/health"
   }
 }
