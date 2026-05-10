@@ -14,7 +14,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "node -r ./scripts/prisma-env.cjs node_modules/.bin/prisma migrate dev",
     "prisma:push": "node -r ./scripts/prisma-env.cjs node_modules/.bin/prisma db push",
-    "prisma:deploy": "node -r ./scripts/prisma-env.cjs node_modules/.bin/prisma db push",
+    "prisma:deploy": "node scripts/prisma-deploy.cjs",
     "prisma:studio": "node -r ./scripts/prisma-env.cjs node_modules/.bin/prisma studio"
   },
   "dependencies": {
