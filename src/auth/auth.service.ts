@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient, UserRole } from '../prisma-client';
 import { RegisterGirlDto } from './dto/register-girl.dto';
@@ -48,7 +48,7 @@ export class AuthService {
   }
 
   private async persistRefresh(userId: string, rawRefresh: string) {
-    const tokenHash = await bcrypt.hash(rawRefresh, 10);
+    const tokenHash = bcrypt.hashSync(rawRefresh, 10);
     const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
     await this.prisma.refreshToken.create({
       data: { userId, tokenHash, expiresAt },
@@ -60,7 +60,7 @@ export class AuthService {
       where: { phone: dto.phone },
     });
     if (exists) throw new ConflictException('Phone already registered');
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = bcrypt.hashSync(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
         phone: dto.phone,
@@ -90,7 +90,7 @@ export class AuthService {
       include: { profile: true },
     });
     if (!user?.passwordHash) throw new UnauthorizedException();
-    const ok = await bcrypt.compare(dto.password, user.passwordHash);
+    const ok = bcrypt.compareSync(dto.password, user.passwordHash);
     if (!ok) throw new UnauthorizedException();
     const access = await this.signAccess(user.id, user.role);
     const refresh = await this.signRefresh(user.id);
@@ -136,7 +136,7 @@ export class AuthService {
     });
     let matched = false;
     for (const row of rows) {
-      if (await bcrypt.compare(rawRefresh, row.tokenHash)) {
+      if (bcrypt.compareSync(rawRefresh, row.tokenHash)) {
         matched = true;
         break;
       }
@@ -161,7 +161,7 @@ export class AuthService {
       where: { phone: dto.phone },
     });
     if (exists) throw new ConflictException('Phone already registered');
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = bcrypt.hashSync(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
         phone: dto.phone,
