@@ -9,6 +9,28 @@ function onRailway() {
   );
 }
 
+/** Copy common underscore / typo variants onto Railway’s canonical names. */
+function syncMysqlAliases() {
+  const pairs = [
+    ['MYSQLHOST', ['MYSQL_HOST', 'MYSQL_HOSTNAME']],
+    ['MYSQLPORT', ['MYSQL_PORT']],
+    ['MYSQLUSER', ['MYSQL_USER']],
+    ['MYSQLPASSWORD', ['MYSQL_PASSWORD']],
+    ['MYSQLDATABASE', ['MYSQL_DATABASE', 'MYSQL_DB']],
+    ['MYSQL_URL', ['MYSQLURL', 'MYSQL_URI']],
+    ['MYSQL_PRIVATE_URL', ['MYSQL_PRIVATE_URI', 'MYSQL_INTERNAL_URL']],
+  ];
+  for (const [canonical, aliases] of pairs) {
+    if (process.env[canonical]) continue;
+    for (const a of aliases) {
+      if (process.env[a]) {
+        process.env[canonical] = process.env[a];
+        break;
+      }
+    }
+  }
+}
+
 /**
  * Sets process.env.DATABASE_URL when missing:
  * 1) MYSQL_URL / MYSQL_PRIVATE_URL (Railway MySQL)
@@ -17,6 +39,8 @@ function onRailway() {
  * 4) Local only: defaults to 127.0.0.1 (never fake this on Railway)
  */
 function ensureDatabaseUrl() {
+  syncMysqlAliases();
+
   if (process.env.DATABASE_URL?.trim()) return;
 
   const mysqlUrl =

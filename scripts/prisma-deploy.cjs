@@ -13,11 +13,13 @@ if (!process.env.DATABASE_URL?.trim()) {
       '[db] DATABASE_URL is not set and could not be built from env.',
       onRailway()
         ? [
-            'On Railway:',
-            '  • Add MySQL (New → Database → MySQL).',
-            '  • On this API service → Variables → add either:',
-            '      – DATABASE_URL = reference → MySQL → MYSQL_URL or MYSQL_PRIVATE_URL, or',
-            '      – references for MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE, MYSQLPORT.',
+            'On Railway (important: use the **API / Nest** service, not only the MySQL box):',
+            '  1) Project → + New → Database → MySQL (if you do not have it yet).',
+            '  2) Open the **same service** that runs this app → Variables.',
+            '  3) Add either:',
+            '       DATABASE_URL = Variable reference → your MySQL service → MYSQL_URL (or MYSQL_PRIVATE_URL),',
+            '     OR references for: MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE, MYSQLPORT.',
+            '  Variables on the MySQL service alone do not reach this container until you reference them here.',
             'Docs: https://docs.railway.com/databases/mysql',
           ].join('\n')
         : 'Locally: set DATABASE_URL in backend/.env or export it before deploy.',
