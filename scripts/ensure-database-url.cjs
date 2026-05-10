@@ -3,7 +3,7 @@
 /**
  * Sets process.env.DATABASE_URL when missing:
  * 1) Railway MySQL: MYSQL_URL or MYSQLHOST + MYSQLUSER + …
- * 2) Local / docker-compose: DB_HOST / DB_USERNAME / … (defaults)
+ * 2) Local: DB_HOST / DB_USERNAME / … (defaults)
  */
 function ensureDatabaseUrl() {
   if (process.env.DATABASE_URL?.trim()) return;
