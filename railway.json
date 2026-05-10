@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "npm run build",
+    "watchPatterns": [
+      "src/**",
+      "prisma/**",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "tsconfig.build.json",
+      "nest-cli.json"
+    ]
+  },
+  "deploy": {
+    "preDeployCommand": ["npm run prisma:deploy"],
+    "startCommand": "npm run start:prod"
+  }
+}
