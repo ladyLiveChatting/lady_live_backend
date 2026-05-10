@@ -1,12 +1,15 @@
 import './bootstrap-env';
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const port = process.env.PORT || 8080;
+
   app.enableCors({ origin: true, credentials: true });
   app.useGlobalInterceptors(new HttpLoggingInterceptor());
   app.useGlobalPipes(
@@ -27,15 +30,9 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, swaggerDocument);
   SwaggerModule.setup('api-docs', app, swaggerDocument);
 
-  const port = process.env.PORT || 8080;
   await app.listen(port, '0.0.0.0');
-  Logger.log(
-    `API http://localhost:${port}  Swagger /docs and /api-docs`,
-    'Bootstrap',
-  );
+
+  console.log(`Server running on port ${port}`);
 }
 
-bootstrap().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+bootstrap();
