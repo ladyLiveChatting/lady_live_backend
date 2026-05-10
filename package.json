@@ -9,6 +9,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug 0.0.0.0:9229 --watch",
     "start:prod": "node dist/main.js",
+    "start:railway": "npm run prisma:deploy && npm run start:prod",
     "db:create": "node scripts/create-db.cjs",
     "db:setup": "npm run db:create && npm run prisma:generate && npm run prisma:push",
     "prisma:generate": "prisma generate",

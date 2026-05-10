@@ -13,7 +13,7 @@
     ]
   },
   "deploy": {
-    "preDeployCommand": ["npm run prisma:deploy"],
-    "startCommand": "npm run start:prod"
+    "preDeployCommand": null,
+    "startCommand": "npm run start:railway"
   }
 }
