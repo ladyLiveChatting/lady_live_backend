@@ -1,9 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient, UserRole, WalletTxType } from '../prisma-client';
+import { loadCoinPackages } from './wallet-packages.config';
 
 @Injectable()
 export class WalletService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly config: ConfigService,
+  ) {}
 
   async getOrThrow(userId: string) {
     const w = await this.prisma.wallet.findUnique({ where: { userId } });
@@ -65,6 +70,20 @@ export class WalletService {
       update: {},
     });
     return this.deduct(userId, amount, note, refCallId);
+  }
+
+  listPackages() {
+    return loadCoinPackages(this.config);
+  }
+
+  async listTransactions(userId: string, limit = 50) {
+    await this.getOrThrow(userId);
+    const take = Math.min(Math.max(limit, 1), 100);
+    return this.prisma.walletTransaction.findMany({
+      where: { walletId: userId },
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
   }
 
   /** Credit earnings (e.g. girl wallet after a call). Creates wallet if missing. */

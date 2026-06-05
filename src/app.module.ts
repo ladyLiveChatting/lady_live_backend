@@ -12,6 +12,10 @@ import { CallsModule } from './calls/calls.module';
 import { SocketModule } from './socket/socket.module';
 import { AgoraModule } from './agora/agora.module';
 import { HealthModule } from './health/health.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { R2Module } from './r2/r2.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { GiftsModule } from './gifts/gifts.module';
 
 const backendRoot = join(__dirname, '..');
 const envFilePaths = nestConfigEnvFilePaths(backendRoot);
@@ -32,6 +36,10 @@ const envFilePaths = nestConfigEnvFilePaths(backendRoot);
     CallsModule,
     SocketModule,
     AgoraModule,
+    NotificationsModule,
+    R2Module,
+    UploadsModule,
+    GiftsModule,
   ],
 })
 export class AppModule {}

@@ -26,6 +26,11 @@ enum WalletTxType {
   DEBIT
 }
 
+enum MessageType {
+  TEXT
+  GIFT
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
@@ -33,6 +38,12 @@ model User {
   passwordHash String?
   role         UserRole
   isGuest      Boolean  @default(false)
+  /// BOY/GUEST: one active login; new login on another device revokes old JWTs.
+  activeSessionId String?
+  /// Last FCM token registered from boys app (optional).
+  pushToken       String? @db.VarChar(512)
+  /// Last device/install id reported from client.
+  deviceId        String? @db.VarChar(191)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -63,6 +74,8 @@ model Profile {
   age              Int?
   country          String?
   imageUrl         String?
+  /// Up to 3 public R2 gallery URLs (girls profile)
+  galleryUrls      Json?
   /// Per-minute rate for girls (callers pay in coins); ignored for boys/guests in UI
   coinsPerMinute   Int      @default(60)
   isOnline         Boolean  @default(false)
@@ -113,12 +126,17 @@ model ConversationParticipant {
 }
 
 model Message {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   conversationId String
   senderId       String
-  body           String   @db.Text
+  type           MessageType @default(TEXT)
+  body           String      @db.Text
+  giftId         String?
+  giftName       String?
+  giftEmoji      String?
+  giftCoins      Int?
   readAt         DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime    @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 

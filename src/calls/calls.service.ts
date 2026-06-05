@@ -25,6 +25,27 @@ export class CallsService {
       include: { profile: true },
     });
     if (!callee?.profile) throw new NotFoundException();
+
+    const girlBaseCoinsPerMinute = callee.profile.coinsPerMinute;
+    const boysVisibleCoinsPerMinute =
+      computeBoysVisibleCoinsPerMinute(girlBaseCoinsPerMinute);
+
+    const caller = await this.prisma.user.findUnique({
+      where: { id: callerId },
+      include: { wallet: true },
+    });
+    if (
+      caller &&
+      (caller.role === UserRole.BOY || caller.role === UserRole.GUEST)
+    ) {
+      const balance = caller.wallet?.balance ?? 0;
+      if (balance < boysVisibleCoinsPerMinute) {
+        throw new BadRequestException(
+          `Insufficient coins (need at least ${boysVisibleCoinsPerMinute} for 1 minute)`,
+        );
+      }
+    }
+
     const call = await this.prisma.call.create({
       data: {
         callerId,
@@ -32,9 +53,6 @@ export class CallsService {
         status: CallStatus.REQUESTED,
       },
     });
-    const girlBaseCoinsPerMinute = callee.profile.coinsPerMinute;
-    const boysVisibleCoinsPerMinute =
-      computeBoysVisibleCoinsPerMinute(girlBaseCoinsPerMinute);
     return {
       call,
       girlBaseCoinsPerMinute,
@@ -67,13 +85,20 @@ export class CallsService {
    * End call: boosted per-minute billing, boy/guest debit, girl net credit,
    * snapshot fields on `Call`. Returns `{ call, billing }` for HTTP + socket clients.
    */
-  async end(callerId: string, callId: string, durationSeconds: number) {
+  async end(userId: string, callId: string, durationSeconds: number) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
       include: { callee: { include: { profile: true } } },
     });
-    if (!call || call.callerId !== callerId) throw new ForbiddenException();
+    if (
+      !call ||
+      (call.callerId !== userId && call.calleeId !== userId)
+    ) {
+      throw new ForbiddenException();
+    }
     if (call.status !== CallStatus.ACCEPTED) throw new BadRequestException();
+
+    const callerId = call.callerId;
 
     const girlBaseCoinsPerMinute = call.callee.profile?.coinsPerMinute ?? 60;
     const billing = computeCallCoinBilling({
@@ -169,19 +194,73 @@ export class CallsService {
     };
   }
 
-  /** Net coins credited to girl wallets from ended calls (after company share). */
-  async earningsSummary(calleeId: string) {
+  private periodStart(daysBack: number): Date {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - daysBack);
+    return d;
+  }
+
+  private monthStart(): Date {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(1);
+    return d;
+  }
+
+  private async earningsAggregate(
+    calleeId: string,
+    since?: Date,
+  ): Promise<{ coins: number; calls: number; callTimeSeconds: number }> {
+    const where: Prisma.CallWhereInput = {
+      calleeId,
+      status: CallStatus.ENDED,
+      ...(since ? { endedAt: { gte: since } } : {}),
+    };
     const agg = await this.prisma.call.aggregate({
-      where: { calleeId, status: CallStatus.ENDED },
-      // Cast: older generated clients may omit billing fields from `CallSumAggregateInputType` until `prisma generate`.
-      _sum: { coinsGirlFinal: true } as unknown as Prisma.CallSumAggregateInputType,
+      where,
+      _sum: {
+        coinsGirlFinal: true,
+        durationSeconds: true,
+      } as unknown as Prisma.CallSumAggregateInputType,
       _count: true,
     });
-    /** Prisma `_sum` shape for this aggregate; avoids `Pick<>` when client types lag schema. */
-    const sum = agg._sum as { coinsGirlFinal?: number | null } | null;
+    const sum = agg._sum as {
+      coinsGirlFinal?: number | null;
+      durationSeconds?: number | null;
+    } | null;
     return {
-      totalCoinsEarned: sum?.coinsGirlFinal ?? 0,
-      completedCalls: agg._count,
+      coins: sum?.coinsGirlFinal ?? 0,
+      calls: agg._count,
+      callTimeSeconds: sum?.durationSeconds ?? 0,
+    };
+  }
+
+  /** Girl earnings dashboard — wallet + period stats from ended calls. */
+  async earningsSummary(calleeId: string) {
+    const weekStart = this.periodStart(
+      (new Date().getDay() + 6) % 7,
+    );
+    const monthStart = this.monthStart();
+
+    const [profile, walletRow, lifetime, week, month] = await Promise.all([
+      this.prisma.profile.findUnique({ where: { userId: calleeId } }),
+      this.prisma.wallet.findUnique({ where: { userId: calleeId } }),
+      this.earningsAggregate(calleeId),
+      this.earningsAggregate(calleeId, weekStart),
+      this.earningsAggregate(calleeId, monthStart),
+    ]);
+
+    return {
+      walletBalance: walletRow?.balance ?? 0,
+      coinsPerMinute: profile?.coinsPerMinute ?? 0,
+      totalCoinsEarned: lifetime.coins,
+      completedCalls: lifetime.calls,
+      callTimeSeconds: lifetime.callTimeSeconds,
+      thisWeekCoins: week.coins,
+      thisWeekCalls: week.calls,
+      thisMonthCoins: month.coins,
+      thisMonthCalls: month.calls,
     };
   }
 }

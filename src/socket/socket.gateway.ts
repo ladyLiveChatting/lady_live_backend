@@ -14,6 +14,7 @@ import { Server, Socket } from 'socket.io';
 import { PrismaClient } from '../prisma-client';
 import { ChatService } from '../chat/chat.service';
 import { CallsService } from '../calls/calls.service';
+import { FcmService } from '../notifications/fcm.service';
 
 type AuthedSocket = Socket & { data: { userId?: string } };
 
@@ -33,6 +34,7 @@ export class AppSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     private readonly prisma: PrismaClient,
     private chat: ChatService,
     private calls: CallsService,
+    private fcm: FcmService,
   ) {}
 
   private accessSecret() {
@@ -60,13 +62,16 @@ export class AppSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       );
       client.data.userId = payload.sub;
       client.join(`user:${payload.sub}`);
+      const profile = await this.prisma.profile.findUnique({
+        where: { userId: payload.sub },
+      });
       await this.prisma.profile.updateMany({
         where: { userId: payload.sub },
-        data: { isOnline: true, lastSeenAt: new Date() },
+        data: { lastSeenAt: new Date() },
       });
       this.server.emit('presence:update', {
         userId: payload.sub,
-        online: true,
+        online: profile?.isOnline ?? false,
       });
     } catch (e) {
       this.log.warn(`Socket auth failed: ${e}`);
@@ -79,9 +84,36 @@ export class AppSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!uid) return;
     await this.prisma.profile.updateMany({
       where: { userId: uid },
-      data: { isOnline: false, lastSeenAt: new Date() },
+      data: { lastSeenAt: new Date() },
     });
-    this.server.emit('presence:update', { userId: uid, online: false });
+    const profile = await this.prisma.profile.findUnique({
+      where: { userId: uid },
+    });
+    this.server.emit('presence:update', {
+      userId: uid,
+      online: profile?.isOnline ?? false,
+    });
+  }
+
+  @SubscribeMessage('presence:set')
+  async presenceSet(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: { online: boolean },
+  ) {
+    const uid = client.data.userId;
+    if (!uid) return { error: 'unauthorized' };
+    if (typeof body?.online !== 'boolean') {
+      return { error: 'online must be boolean' };
+    }
+    await this.prisma.profile.updateMany({
+      where: { userId: uid },
+      data: { isOnline: body.online, lastSeenAt: new Date() },
+    });
+    this.server.emit('presence:update', {
+      userId: uid,
+      online: body.online,
+    });
+    return { ok: true, online: body.online };
   }
 
   @SubscribeMessage('join_conversation')
@@ -120,10 +152,28 @@ export class AppSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       uid,
       body.body,
     );
-    this.server
-      .to(`conversation:${body.conversationId}`)
-      .emit('chat:message', msg);
+    this.emitChatMessage(body.conversationId, msg);
     return { ok: true, message: msg };
+  }
+
+  /** Broadcast a chat message (text or gift) to conversation room. */
+  emitChatMessage(
+    conversationId: string,
+    msg: {
+      id: string;
+      conversationId: string;
+      senderId: string;
+      type?: string;
+      body: string;
+      giftId?: string | null;
+      giftName?: string | null;
+      giftEmoji?: string | null;
+      giftCoins?: number | null;
+      readAt?: Date | null;
+      createdAt: Date;
+    },
+  ) {
+    this.server.to(`conversation:${conversationId}`).emit('chat:message', msg);
   }
 
   @SubscribeMessage('chat:read')
@@ -150,11 +200,35 @@ export class AppSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     const uid = client.data.userId;
     if (!uid) return { error: 'unauthorized' };
     const { call, rate } = await this.calls.request(uid, body.calleeId);
+    const caller = await this.prisma.user.findUnique({
+      where: { id: uid },
+      include: { profile: true },
+    });
+    const callerDisplayName =
+      caller?.profile?.displayName?.trim() || 'Someone';
     this.server.to(`user:${body.calleeId}`).emit('call:incoming', {
       call,
       rate,
       callerId: uid,
+      callerDisplayName,
     });
+    const callee = await this.prisma.user.findUnique({
+      where: { id: body.calleeId },
+      select: { pushToken: true },
+    });
+    if (callee?.pushToken && this.fcm.isReady('girls')) {
+      void this.fcm
+        .sendGirlsToTokens([callee.pushToken], {
+          title: 'Incoming video call',
+          body: `${callerDisplayName} is calling you`,
+          data: {
+            type: 'call_incoming',
+            callId: call.id,
+            callerId: uid,
+          },
+        })
+        .catch((err) => this.log.warn(`FCM call push failed: ${err}`));
+    }
     return { ok: true, call, rate };
   }
 

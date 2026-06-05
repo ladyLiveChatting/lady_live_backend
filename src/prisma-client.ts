@@ -8,4 +8,5 @@ export {
   UserRole,
   CallStatus,
   WalletTxType,
+  MessageType,
 } from '../node_modules/.prisma/client';

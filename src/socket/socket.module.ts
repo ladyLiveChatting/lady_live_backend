@@ -4,11 +4,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppSocketGateway } from './socket.gateway';
 import { ChatModule } from '../chat/chat.module';
 import { CallsModule } from '../calls/calls.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     ChatModule,
     CallsModule,
+    NotificationsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -18,5 +20,6 @@ import { CallsModule } from '../calls/calls.module';
     }),
   ],
   providers: [AppSocketGateway],
+  exports: [AppSocketGateway],
 })
 export class SocketModule {}

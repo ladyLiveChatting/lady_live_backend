@@ -33,18 +33,26 @@ export class AuthService {
     );
   }
 
-  private async signAccess(userId: string, role: UserRole) {
-    return this.jwt.signAsync(
-      { sub: userId, role },
-      { secret: this.accessSecret(), expiresIn: '15m' },
-    );
+  private async signAccess(
+    userId: string,
+    role: UserRole,
+    sessionId?: string,
+  ) {
+    const p: Record<string, string> = { sub: userId, role };
+    if (sessionId) p.sid = sessionId;
+    return this.jwt.signAsync(p, {
+      secret: this.accessSecret(),
+      expiresIn: '15m',
+    });
   }
 
-  private async signRefresh(userId: string) {
-    return this.jwt.signAsync(
-      { sub: userId, typ: 'refresh' },
-      { secret: this.refreshSecret(), expiresIn: '7d' },
-    );
+  private async signRefresh(userId: string, sessionId?: string) {
+    const p: Record<string, string> = { sub: userId, typ: 'refresh' };
+    if (sessionId) p.sid = sessionId;
+    return this.jwt.signAsync(p, {
+      secret: this.refreshSecret(),
+      expiresIn: '7d',
+    });
   }
 
   private async persistRefresh(userId: string, rawRefresh: string) {
@@ -53,6 +61,27 @@ export class AuthService {
     await this.prisma.refreshToken.create({
       data: { userId, tokenHash, expiresAt },
     });
+  }
+
+  /** BOY / GUEST: one active session; new login replaces refresh rows + session id. */
+  private async issueBoyGuestTokens(userId: string, role: UserRole) {
+    const sid = uuidv4();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { activeSessionId: sid },
+    });
+    await this.prisma.refreshToken.deleteMany({ where: { userId } });
+    const access = await this.signAccess(userId, role, sid);
+    const refresh = await this.signRefresh(userId, sid);
+    await this.persistRefresh(userId, refresh);
+    return { accessToken: access, refreshToken: refresh, userId };
+  }
+
+  private async issueStandardTokens(userId: string, role: UserRole) {
+    const access = await this.signAccess(userId, role);
+    const refresh = await this.signRefresh(userId);
+    await this.persistRefresh(userId, refresh);
+    return { accessToken: access, refreshToken: refresh, userId };
   }
 
   async registerGirl(dto: RegisterGirlDto) {
@@ -78,10 +107,7 @@ export class AuthService {
         },
       },
     });
-    const access = await this.signAccess(user.id, user.role);
-    const refresh = await this.signRefresh(user.id);
-    await this.persistRefresh(user.id, refresh);
-    return { accessToken: access, refreshToken: refresh, userId: user.id };
+    return this.issueStandardTokens(user.id, user.role);
   }
 
   async login(dto: LoginDto) {
@@ -92,18 +118,22 @@ export class AuthService {
     if (!user?.passwordHash) throw new UnauthorizedException();
     const ok = bcrypt.compareSync(dto.password, user.passwordHash);
     if (!ok) throw new UnauthorizedException();
-    const access = await this.signAccess(user.id, user.role);
-    const refresh = await this.signRefresh(user.id);
-    await this.persistRefresh(user.id, refresh);
-    return { accessToken: access, refreshToken: refresh, userId: user.id };
+    if (user.role === UserRole.BOY || user.role === UserRole.GUEST) {
+      return this.issueBoyGuestTokens(user.id, user.role);
+    }
+    return this.issueStandardTokens(user.id, user.role);
   }
 
   async guest(dto: GuestDto) {
     const name = dto.displayName?.trim() || `Guest ${uuidv4().slice(0, 6)}`;
+    const fcm = dto.fcmToken?.trim();
+    const deviceId = dto.deviceId?.trim();
     const user = await this.prisma.user.create({
       data: {
         role: UserRole.GUEST,
         isGuest: true,
+        ...(deviceId ? { deviceId } : {}),
+        ...(fcm ? { pushToken: fcm } : {}),
         profile: {
           create: {
             displayName: name,
@@ -115,14 +145,11 @@ export class AuthService {
         wallet: { create: { balance: 500 } },
       },
     });
-    const access = await this.signAccess(user.id, user.role);
-    const refresh = await this.signRefresh(user.id);
-    await this.persistRefresh(user.id, refresh);
-    return { accessToken: access, refreshToken: refresh, userId: user.id };
+    return this.issueBoyGuestTokens(user.id, user.role);
   }
 
   async refresh(rawRefresh: string) {
-    let payload: { sub: string; typ?: string };
+    let payload: { sub: string; typ?: string; sid?: string };
     try {
       payload = await this.jwt.verifyAsync(rawRefresh, {
         secret: this.refreshSecret(),
@@ -142,9 +169,41 @@ export class AuthService {
       }
     }
     if (!matched) throw new UnauthorizedException();
+
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: payload.sub },
     });
+
+    const isBoyOrGuest =
+      user.role === UserRole.BOY || user.role === UserRole.GUEST;
+
+    if (isBoyOrGuest) {
+      if (user.activeSessionId) {
+        if (payload.sid !== user.activeSessionId) {
+          throw new UnauthorizedException('Session revoked');
+        }
+      } else if (payload.sid) {
+        throw new UnauthorizedException('Invalid session');
+      }
+
+      await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+      const sid = user.activeSessionId ?? uuidv4();
+      if (!user.activeSessionId) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { activeSessionId: sid },
+        });
+      }
+      const access = await this.signAccess(user.id, user.role, sid);
+      const nextRefresh = await this.signRefresh(user.id, sid);
+      await this.persistRefresh(user.id, nextRefresh);
+      return {
+        accessToken: access,
+        refreshToken: nextRefresh,
+        userId: user.id,
+      };
+    }
+
     await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
     const access = await this.signAccess(user.id, user.role);
     const nextRefresh = await this.signRefresh(user.id);
@@ -179,10 +238,7 @@ export class AuthService {
         wallet: { create: { balance: 200 } },
       },
     });
-    const access = await this.signAccess(user.id, user.role);
-    const refresh = await this.signRefresh(user.id);
-    await this.persistRefresh(user.id, refresh);
-    return { accessToken: access, refreshToken: refresh, userId: user.id };
+    return this.issueBoyGuestTokens(user.id, user.role);
   }
 
   /**
@@ -204,7 +260,8 @@ export class AuthService {
           role: UserRole.BOY,
           profile: {
             create: {
-              displayName: dto.displayName?.trim() || `Boy ${uuidv4().slice(0, 6)}`,
+              displayName:
+                dto.displayName?.trim() || `Boy ${uuidv4().slice(0, 6)}`,
               coinsPerMinute: 0,
               isOnline: false,
             },
@@ -213,10 +270,7 @@ export class AuthService {
         },
       }));
 
-    const access = await this.signAccess(user.id, user.role);
-    const refresh = await this.signRefresh(user.id);
-    await this.persistRefresh(user.id, refresh);
-    return { accessToken: access, refreshToken: refresh, userId: user.id };
+    return this.issueBoyGuestTokens(user.id, user.role);
   }
 
   /**
@@ -250,9 +304,6 @@ export class AuthService {
         },
       }));
 
-    const access = await this.signAccess(user.id, user.role);
-    const refresh = await this.signRefresh(user.id);
-    await this.persistRefresh(user.id, refresh);
-    return { accessToken: access, refreshToken: refresh, userId: user.id };
+    return this.issueStandardTokens(user.id, user.role);
   }
 }

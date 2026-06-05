@@ -6,6 +6,24 @@ import { computeBoysVisibleCoinsPerMinute } from '../billing/call-coin-billing';
 export class DiscoveryService {
   constructor(private readonly prisma: PrismaClient) {}
 
+  private parseGalleryUrls(raw: unknown): string[] {
+    if (raw == null) return [];
+    if (Array.isArray(raw)) {
+      return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
+    }
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((x): x is string => typeof x === 'string' && x.length > 0);
+        }
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
   /** Boys / guests see girls; girls see boys (BOY role). */
   async onlineForViewer(viewerRole: UserRole, minAge?: number, maxAge?: number, country?: string) {
     const targetRole =
@@ -45,6 +63,9 @@ export class DiscoveryService {
         country: u.profile?.country,
         bio: u.profile?.bio,
         imageUrl: u.profile?.imageUrl,
+        galleryUrls: isGirlProfile
+          ? this.parseGalleryUrls(u.profile?.galleryUrls)
+          : undefined,
         isOnline: u.profile?.isOnline,
         coinsPerMinute: base,
         ...(isGirlProfile
