@@ -110,16 +110,17 @@ export class PaymentsService {
         },
       });
 
-      if (verified && payment.coins && payment.coins > 0) {
+      const coins = (payment as { coins?: number }).coins ?? 0;
+      if (verified && coins > 0) {
         await tx.wallet.upsert({
           where: { userId },
-          create: { userId, balance: payment.coins },
-          update: { balance: { increment: payment.coins } },
+          create: { userId, balance: coins },
+          update: { balance: { increment: coins } },
         });
         await tx.walletTransaction.create({
           data: {
             walletId: userId,
-            amount: payment.coins,
+            amount: coins,
             type: WalletTxType.CREDIT,
             note: 'razorpay_topup',
           },
