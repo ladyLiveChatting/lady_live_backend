@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { R2Module } from './r2/r2.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { GiftsModule } from './gifts/gifts.module';
+import { PaymentsModule } from './payments/payments.module';
 
 const backendRoot = join(__dirname, '..');
 const envFilePaths = nestConfigEnvFilePaths(backendRoot);
@@ -40,6 +41,7 @@ const envFilePaths = nestConfigEnvFilePaths(backendRoot);
     R2Module,
     UploadsModule,
     GiftsModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

@@ -9,4 +9,5 @@ export {
   CallStatus,
   WalletTxType,
   MessageType,
+  PaymentStatus,
 } from '../node_modules/.prisma/client';
