@@ -1,0 +1,10 @@
+{
+  "name": "backend-project-scaffold",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start"
+  },
+  "dependencies": {}
+}
