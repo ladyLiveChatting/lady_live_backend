@@ -7,3 +7,4 @@ dist
 *.tsbuildinfo
 *firebase*adminsdk*.json
 firebase-service-account.json
+node_modules/
