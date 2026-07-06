@@ -1,8 +1,9 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient, PaymentStatus, WalletTxType } from '../prisma-client';
@@ -13,9 +14,11 @@ const Razorpay = require('razorpay');
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private readonly razorpay: any;
   private readonly keyId: string;
   private readonly keySecret: string;
+  private readonly isConfigured: boolean;
 
   constructor(
     private readonly config: ConfigService,
@@ -24,10 +27,13 @@ export class PaymentsService {
     this.keyId = this.config.get<string>('RAZORPAY_KEY_ID')?.trim() ?? '';
     this.keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET')?.trim() ?? '';
     if (!this.keyId || !this.keySecret) {
-      throw new InternalServerErrorException(
-        'Razorpay credentials are not configured',
+      this.logger.warn(
+        'Razorpay is not configured. Payment features are disabled.',
       );
+      this.isConfigured = false;
+      return;
     }
+    this.isConfigured = true;
     this.razorpay = new Razorpay({
       key_id: this.keyId,
       key_secret: this.keySecret,
@@ -46,6 +52,12 @@ export class PaymentsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    if (!this.isConfigured) {
+      throw new ServiceUnavailableException(
+        'Payment gateway is not configured. Cannot create order.',
+      );
     }
 
     const order = await this.razorpay.orders.create({
@@ -83,6 +95,12 @@ export class PaymentsService {
     }
     if (payment.userId !== userId) {
       throw new BadRequestException('User mismatch for this payment');
+    }
+
+    if (!this.isConfigured) {
+      throw new ServiceUnavailableException(
+        'Payment gateway is not configured. Cannot verify payment.',
+      );
     }
 
     const expectedSignature = this.generateSignature(
