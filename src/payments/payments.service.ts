@@ -67,7 +67,7 @@ export class PaymentsService {
       const order = await this.razorpay.orders.create({
         amount: paymentAmount,
         currency,
-        receipt: `receipt_${userId}_${Date.now()}`,
+        receipt: `rcpt_${Date.now()}`,
         payment_capture: 1,
       });
 
