@@ -45,6 +45,8 @@ export class PaymentsService {
     const paymentAmount = dto.amount * 100;
     const coins = dto.coins ?? 0;
 
+    this.logger.log(`Creating order for user ${userId}, amount: ${dto.amount} ${currency}, coins: ${coins}`);
+
     if (paymentAmount <= 0) {
       throw new BadRequestException('Amount must be greater than zero');
     }
@@ -55,35 +57,43 @@ export class PaymentsService {
     }
 
     if (!this.isConfigured) {
+      this.logger.error('Razorpay not configured - missing key or secret');
       throw new ServiceUnavailableException(
         'Payment gateway is not configured. Cannot create order.',
       );
     }
 
-    const order = await this.razorpay.orders.create({
-      amount: paymentAmount,
-      currency,
-      receipt: `receipt_${userId}_${Date.now()}`,
-      payment_capture: 1,
-    });
+    try {
+      const order = await this.razorpay.orders.create({
+        amount: paymentAmount,
+        currency,
+        receipt: `receipt_${userId}_${Date.now()}`,
+        payment_capture: 1,
+      });
 
-    await this.prisma.payment.create({
-      data: {
-        userId,
+      this.logger.log(`Razorpay order created: ${order.id}`);
+
+      await this.prisma.payment.create({
+        data: {
+          userId,
+          orderId: order.id,
+          amount: paymentAmount,
+          coins,
+          currency,
+          status: PaymentStatus.PENDING,
+        },
+      });
+
+      return {
+        key: this.keyId,
         orderId: order.id,
         amount: paymentAmount,
-        coins,
         currency,
-        status: PaymentStatus.PENDING,
-      },
-    });
-
-    return {
-      key: this.keyId,
-      orderId: order.id,
-      amount: paymentAmount,
-      currency,
-    };
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create Razorpay order: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   async verifyPayment(userId: string, dto: VerifyPaymentDto) {
