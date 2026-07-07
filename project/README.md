@@ -7,4 +7,4 @@ This directory is a minimal scaffold for the backend project. It contains:
 - `tsconfig.json`, `nest-cli.json` — TypeScript and Nest CLI config
 - `.gitignore`
 
-Use this as a lightweight starting point for backend-only operations.
+Use this as a lightweigsdmnbfmnsdbht startingmndsbmnbsdmfnb point for backend-only operations.nbvnbvnb
